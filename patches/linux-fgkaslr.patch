@@ -1,0 +1,110 @@
+diff --git a/arch/x86/boot/compressed/benchmark.h b/arch/x86/boot/compressed/benchmark.h
+new file mode 100644
+index 000000000000..b235b97848b9
+--- /dev/null
++++ b/arch/x86/boot/compressed/benchmark.h
+@@ -0,0 +1,17 @@
++#ifndef BENCHMARK_H
++#define BENCHMARK_H
++
++/* IO ports for different exit points */
++#define LINUX_EXIT_PORT 0xf4
++#define FW_EXIT_PORT    0xf5
++
++/* Exit point values */
++#define FW_START    1
++#define LINUX_START_FWCFG 2
++#define LINUX_START_BOOT  3
++#define LINUX_START_PVHBOOT  4
++#define FW_DO_BOOT 5
++#define LINUX_START_KERNEL 6
++#define LINUX_START_USER 7
++
++#endif
+\ No newline at end of file
+diff --git a/init/benchmark.h b/init/benchmark.h
+new file mode 100644
+index 000000000000..b235b97848b9
+--- /dev/null
++++ b/init/benchmark.h
+@@ -0,0 +1,17 @@
++#ifndef BENCHMARK_H
++#define BENCHMARK_H
++
++/* IO ports for different exit points */
++#define LINUX_EXIT_PORT 0xf4
++#define FW_EXIT_PORT    0xf5
++
++/* Exit point values */
++#define FW_START    1
++#define LINUX_START_FWCFG 2
++#define LINUX_START_BOOT  3
++#define LINUX_START_PVHBOOT  4
++#define FW_DO_BOOT 5
++#define LINUX_START_KERNEL 6
++#define LINUX_START_USER 7
++
++#endif
+\ No newline at end of file
+diff --git a/arch/x86/boot/compressed/misc.c b/arch/x86/boot/compressed/misc.c
+index ce1c84f64c1e..b9a0ade013b3 100644
+--- a/arch/x86/boot/compressed/misc.c
++++ b/arch/x86/boot/compressed/misc.c
+@@ -18,6 +18,7 @@
+ #include "../string.h"
+ #include "../voffset.h"
+ #include <asm/bootparam_utils.h>
++#include "benchmark.h"
+ 
+ /*
+  * WARNING!!
+@@ -542,11 +543,13 @@ asmlinkage __visible void *extract_kernel(void *rmode, memptr heap,
+ #endif
+ 
+ 	debug_putstr("\nDecompressing Linux... ");
++	outb(LINUX_START_KERNEL, LINUX_EXIT_PORT);
+ 	__decompress(input_data, input_len, NULL, NULL, output, output_len,
+ 			NULL, error);
+ 	parse_elf(output);
+ 	handle_relocations(output, output_len, virt_addr);
+ 	debug_putstr("done.\nBooting the kernel.\n");
++	
+ 
+ 	/*
+ 	 * Flush GHCB from cache and map it encrypted again when running as
+diff --git a/init/main.c b/init/main.c
+index c68d784376ca..e678fd806733 100644
+--- a/init/main.c
++++ b/init/main.c
+@@ -12,6 +12,7 @@
+ 
+ #define DEBUG		/* Enable initcall_debug */
+ 
++#include "benchmark.h"
+ #include <linux/types.h>
+ #include <linux/extable.h>
+ #include <linux/module.h>
+@@ -1431,6 +1432,8 @@ static int __ref kernel_init(void *unused)
+ 
+ 	rcu_end_inkernel_boot();
+ 
++	outb(LINUX_START_USER, LINUX_EXIT_PORT);
++
+ 	do_sysctl_args();
+ 
+ 	if (ramdisk_execute_command) {
+diff --git a/kernel/kallsyms.c b/kernel/kallsyms.c
+index 7bbe72ecb4d4..281eaec26270 100644
+--- a/kernel/kallsyms.c
++++ b/kernel/kallsyms.c
+@@ -819,7 +819,9 @@ static int kallsyms_random_open(struct inode *inode, struct file *file)
+ 	 * displaying symbols
+ 	 */
+ 	show_value = kallsyms_show_value(file->f_cred);
+-	if (show_value)
++	// BCWH make this true to make sure we are definitely seeing kallsyms correctly
++	//if (show_value)
++	if (true)
+ 		return __kallsyms_open(inode, file);
+ 
+ 	/*
